@@ -1,0 +1,146 @@
+with posts as (
+  select
+    *
+  from
+  (
+    select
+      post_id,
+      lt_id,
+      pc.created_at,
+      pc.export_id,
+      pc.preview_media_id,
+      pc.duration,
+      pc.height,
+      pc.width,
+      pc.app_name,
+      pr.post_id as remove_id,
+      pc.meta_received_at,
+      ur.platform,
+      row_number() over(partition by post_id order by pc.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.backend_feed_post_create` as pc
+    left join `ltx-dwh-prod-raw.analytics_global.ltx_global_app_feed_user_registered` ur using(account_id)
+    left join `ltx-dwh-prod-raw.analytics.backend_feed_post_remove` pr using(post_id)
+    where pc.parent_template_id is null and "branded" not in unnest(post_metadata) and pc.app_name = "videoleap"
+    and preview_media_id is not null
+  )
+  where rn = 1 and remove_id is null
+),
+
+posts_with_analytics as (
+  select
+    *
+  from (
+    select
+      p.post_id,
+      p.lt_id,
+      p.preview_media_id,
+      p.duration,
+      p.height,
+      p.width,
+      p.meta_received_at as post_timestamp,
+      es.session_analytics_id,
+      row_number() over (partition by e.export_id
+                        order by e.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.ios_videoleap_media_exported` e
+    join `ltx-dwh-prod-raw.analytics.ios_videoleap_media_export_started` es on lower(es.open_project_id) = lower(e.open_project_id)
+    join posts p on lower(p.export_id) = lower(e.export_id)
+    where e.meta_received_at >= '2023-04-20'
+  )
+  where rn = 1
+  union all
+  select
+    *
+  from (
+    select
+      p.post_id,
+      p.lt_id,
+      p.preview_media_id,
+      p.duration,
+      p.height,
+      p.width,
+      p.meta_received_at as post_timestamp,
+      es.session_analytics_id,
+      row_number() over (partition by e.export_id
+                        order by e.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.android_videoleap_media_exported` e
+    join `ltx-dwh-prod-raw.analytics.android_videoleap_session_analytics_reported` es on lower(es.open_project_id) = lower(e.project_id)
+    join posts p on lower(p.export_id) = lower(e.export_id)
+    where e.meta_received_at >= '2023-04-20'
+  ) where rn = 1
+),
+
+features as (
+  select
+    session_analytics_id,
+    sum(is_replaceable) as replaceable_count,
+    array_agg(object_type) as feature_types,
+    array_agg(start_time) as start_times,
+    array_agg(feature_duration) as feature_durations
+  from (
+    select
+      session_analytics_id,
+      case
+        when is_replaceable = 'true' then 1
+        else 0
+      end as is_replaceable,
+      cast(start_time as float64) as start_time,
+      cast(end_time as float64) as end_time,
+      (cast(end_time as float64) - cast(start_time as float64)) as feature_duration,
+      regexp_replace(object, r'"', '') as object_type,
+    from (
+      select
+        session_analytics_id,
+        json_extract(json, '$.object_type') as object,
+        json_extract_scalar(json, "$.is_replaceable") as is_replaceable,
+        json_extract(json, '$.start_time') as start_time,
+        json_extract(json, '$.end_time') as end_time
+      from (
+        select
+          session_analytics_id,
+          json,
+        from (
+          select
+            session_analytics_ID,
+            outline_JSON
+          from `ltx-dwh-prod-raw.analytics.ios_videoleap_session_outline_json`
+          where meta_received_at >= '2023-04-20'
+        )
+        cross join unnest(json_extract_array(outline_json)) as json
+      )
+      union all
+      select
+        session_analytics_id,
+        json_extract(json, '$.object_type') as object,
+        'true' as is_replaceable,
+        json_extract(json, '$.start_time') as start_time,
+        json_extract(json, '$.end_time') as end_time
+      from (
+        select
+          session_analytics_id,
+          json,
+        from (
+          select
+            session_analytics_ID,
+            outline_JSON
+          from `ltx-dwh-prod-raw.analytics.android_videoleap_session_outline_json`
+          where meta_received_at >= '2023-04-20'
+        )
+        cross join unnest(json_extract_array(outline_json)) as json
+      )
+    )
+  )
+  group by 1
+),
+
+all_posts_with_features as (
+  select
+    *
+  from posts_with_analytics
+  join features using (session_analytics_id)
+  -- join transitions using (session_analytics_id)
+)
+
+
+
+select *
+from all_posts_with_features

@@ -1,0 +1,8 @@
+cloud:
+  CLOUD_LOCATION: "US"
+  PROJECT: "ltx-dwh-playground"
+
+paths:
+  TEMPLATES_QUERY_PATH: "queries/templates_with_features.txt"
+  TEMPLATES_PATH: "data/templates.csv"
+  VIDEOS_PATH: "data/video_data"
