@@ -14,9 +14,8 @@ VIDEOS_PATH = config['paths']['VIDEOS_PATH']
 
 
 def get_urls(num_samples=None):
-    urls = pd.read_csv('data/originals_ids.csv')
-    urls = urls.iloc[50_000:]
-    urls = urls.media_id.tolist()
+    urls = pd.read_csv('data/templates.csv')
+    urls = urls.preview_media_id.drop_duplicates().tolist()
     if num_samples is not None:
         urls = random.sample(urls, num_samples)
     base_url = "https://res.cloudinary.com/lightricks/video/upload/"
@@ -93,6 +92,14 @@ def save_encoding(frames_df, save_path, visited_path):
         frames_df.to_csv(save_path, mode='a', header=False)
     elif len(names) == 0:
         print("no new video was found")
+
+
+def get_center_clips(previews):
+    df = pd.read_csv('data/templates.csv')
+    df = df[df['feature_types'].isin(['Clip', 'Mixer'])]
+    df = df[df['preview_media_id'].isin(previews)]
+    df['center_time'] = (df['start_times'] + df['feature_durations'])/2
+    return df
 
 
 if __name__ == '__main__':

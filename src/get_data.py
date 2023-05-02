@@ -29,7 +29,7 @@ class SingleQuery:
 
     Example:
         >>> from src.get_data import SingleQuery
-        >>> query = SingleQuery('queries/templates_with_features.txt.txt')
+        >>> query = SingleQuery('queries/templates_with_features.txt')
         >>> result = query.run_query('df')
         >>> processed_result = SingleQuery.post_process(result)
     """
