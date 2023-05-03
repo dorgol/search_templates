@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, BlipForConditionalGeneration, BlipForQuestionAnswering
+from transformers import AutoProcessor, BlipForConditionalGeneration, BlipForQuestionAnswering, BlipModel
 
 
 class VideoModel:
@@ -29,9 +29,11 @@ vm_vqa_processor = "Salesforce/blip-vqa-base"
 vm_vqa_model = "Salesforce/blip-vqa-base"
 
 
+vm_blip = VideoModel(vm_caption_processor, vm_caption_model, BlipModel)
 vm_caption = VideoModel(vm_caption_processor, vm_caption_model, BlipForConditionalGeneration)
 vm_vqa = VideoModel(vm_vqa_processor, vm_vqa_model, BlipForQuestionAnswering)
 
+processor_blip, model_blip = vm_blip.get_processor_model()
 processor_caption, model_caption = vm_caption.get_processor_model()
 processor_vqa, model_vqa = vm_vqa.get_processor_model()
 

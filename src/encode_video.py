@@ -8,30 +8,28 @@ from transformers.models.clip.modeling_clip import CLIPOutput
 
 
 class VideoPreprocess:
-    def __init__(self, video: cv2.VideoCapture, model_frames, sample_method="random",
-                 starting_frame=None, video_path=None, times=None):
+    def __init__(self, video: cv2.VideoCapture, model_frames, sample_method="random", **kwargs):
         self.video = video
         self.model_frames = model_frames
         self.sample_method = sample_method
-        self.starting_frame = starting_frame
-        self.video_path = video_path
-        self.times = times
-        self.indices = self.sample_frame_indices(video_frames=int(self.video.get(7)),
-                                                 num_frames=self.model_frames,
-                                                 sample_method=self.sample_method,
-                                                 times=self.times)
+        self.kwargs = kwargs
+        self.indices = self.sample_frame_indices(num_frames=self.model_frames,
+                                                 sample_method=self.sample_method)
 
-    def sample_frame_indices(self, video_frames, num_frames, sample_method="linear", starting_frame=None, times=None):
+    def sample_frame_indices(self, num_frames, sample_method):
         indices = None
+        video_frames = int(self.video.get(7))
         if sample_method == "linear":
             indices = np.round(np.linspace(0, video_frames, num=num_frames))
         elif sample_method == "random":
             indices = np.random.choice(video_frames, num_frames, replace=False)
             indices.sort(axis=0)
         elif sample_method == "consecutive":
+            starting_frame = self.kwargs['starting_frame']
             indices = np.array(range(starting_frame, starting_frame+self.model_frames))
         elif sample_method == "from_scene":
-            scene_list = detect(self.video_path, ContentDetector(), show_progress=True)
+            video_path = self.kwargs['video_path']
+            scene_list = detect(video_path, ContentDetector(), show_progress=True)
             if len(scene_list) > 0:
                 key_frame_ind = []
                 for scene in scene_list:
@@ -43,6 +41,7 @@ class VideoPreprocess:
             elif len(scene_list) == 0:
                 indices = [int(self.video.get(7)/2)]
         elif sample_method == "times":
+            times = self.kwargs['times']
             frame_rate = self.video.get(cv2.CAP_PROP_FPS)
             indices = []
             for time_stamp in times:
@@ -70,8 +69,8 @@ class VideoPreprocess:
 
 
 class VideoEncode(VideoPreprocess):
-    def __init__(self, video: cv2.VideoCapture, processor, model, model_frames, sample_method, times, tags=None):
-        super().__init__(video, model_frames, sample_method, times)
+    def __init__(self, video: cv2.VideoCapture, processor, model, model_frames, sample_method,  tags=None, **kwargs):
+        super().__init__(video, model_frames, sample_method, **kwargs)
         self.model = model
         self.processor = processor
         self.tags = tags
@@ -82,6 +81,7 @@ class VideoEncode(VideoPreprocess):
             images=list(video),
             return_tensors="pt",
             padding=True,
+            text="A picture of"
         )
 
         with torch.no_grad():
@@ -97,7 +97,7 @@ class VideoEncode(VideoPreprocess):
         if outputs is None:
             outputs = self.encode()
         embeddings = pd.DataFrame(self.get_visual_embedding(outputs).detach().numpy())
-        video_name_list = [video_name] * self.model_frames
+        video_name_list = [video_name] * len(embeddings)
         df = pd.DataFrame({'name': video_name_list, 'indices': self.indices})
         frames_df = pd.concat([df, embeddings], axis=1)
         return frames_df

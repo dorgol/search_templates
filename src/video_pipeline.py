@@ -2,21 +2,16 @@ import os
 import re
 
 import yaml
-from transformers import AutoProcessor, AutoModel
 
 import src.encode_video as ev
 import src.video_utils as vu
-# from config.general_config import VISITED_PATH, VID_EMB_PATH, VIDEOS_PATH
-from src.video_model import model_to_use
-from optimum.bettertransformer import BetterTransformer
+from src.video_model import processor_blip, model_blip
 
 with open('config.yaml') as f:
     config = yaml.safe_load(f)
 VIDEOS_PATH = config['paths']['VIDEOS_PATH']
-
-processor = AutoProcessor.from_pretrained(model_to_use)
-model = AutoModel.from_pretrained(model_to_use)
-model = BetterTransformer.transform(model, keep_original_model=True)
+VID_EMB_PATH = config['paths']['VID_EMB_PATH']
+VISITED_PATH = config['paths']['VISITED_PATH']
 
 
 class VideoPipeline:
@@ -29,10 +24,10 @@ class VideoPipeline:
         vu.download_video(self.url)
         video = vu.load_video(self.video_path)
         centers = vu.get_center_clips([self.media_preview])['center_time'].tolist()
-        ve = ev.VideoEncode(video=video, processor=processor, model=model, model_frames=16, sample_method='times',
-                            times=centers)
-        # df = ve.get_frames_df(os.path.basename(self.video_path))
-        # vu.save_encoding(df, VID_EMB_PATH, VISITED_PATH)
+        ve = ev.VideoEncode(video=video, processor=processor_blip, model=model_blip,
+                            model_frames=16, sample_method='times', times=centers)
+        df = ve.get_frames_df(os.path.basename(self.video_path))
+        vu.save_encoding(df, VID_EMB_PATH, VISITED_PATH)
         vu.delete_video(self.video_path)
 
 
@@ -46,7 +41,5 @@ def run_all(urls):
 
 
 if __name__ == '__main__':
-    urls = vu.get_urls(2)
-    vp = VideoPipeline(urls[0])
-    vp.pipeline()
+    urls = vu.get_urls(100)
     run_all(urls)

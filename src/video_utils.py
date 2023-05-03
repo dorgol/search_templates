@@ -96,7 +96,7 @@ def save_encoding(frames_df, save_path, visited_path):
 
 def get_center_clips(previews):
     df = pd.read_csv('data/templates.csv')
-    df = df[df['feature_types'].isin(['Clip', 'Mixer'])]
+    df = df[df['feature_types'].str.lower().isin(['clip', 'mixer'])]
     df = df[df['preview_media_id'].isin(previews)]
     df['center_time'] = (df['start_times'] + df['feature_durations'])/2
     return df
