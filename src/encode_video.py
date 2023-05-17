@@ -69,7 +69,8 @@ class VideoPreprocess:
 
 
 class VideoEncode(VideoPreprocess):
-    def __init__(self, video: cv2.VideoCapture, processor, model, model_frames, sample_method,  tags=None, **kwargs):
+    def __init__(self, video: cv2.VideoCapture, processor, model, sample_method, model_frames=None, tags=None,
+                 **kwargs):
         super().__init__(video, model_frames, sample_method, **kwargs)
         self.model = model
         self.processor = processor
@@ -81,17 +82,16 @@ class VideoEncode(VideoPreprocess):
             images=list(video),
             return_tensors="pt",
             padding=True,
-            text="A picture of"
         )
 
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs = self.model.get_image_features(**inputs)
         return outputs
 
     def get_visual_embedding(self, outputs=None):
         if outputs is None:
             outputs = self.encode()
-        return outputs.image_embeds
+        return outputs
 
     def get_frames_df(self, video_name, outputs=None):
         if outputs is None:
@@ -112,3 +112,15 @@ class VideoEncode(VideoPreprocess):
         df = pd.DataFrame(self.tags)
         df_tags = df.iloc[outputs.logits_per_image.argmax(dim=1).tolist(), :]
         return df_tags
+
+    def caption(self):
+        text = "A picture of"
+        video = self.get_video_slice()
+        captions = []
+        for i in range(len(video)):
+            pixel_values = self.processor(images=video[i], return_tensors="pt").pixel_values
+            generated_ids = self.model.generate(pixel_values=pixel_values, max_new_tokens=20)
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+            captions.append(generated_text)
+        return captions
+

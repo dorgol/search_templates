@@ -103,4 +103,4 @@ def get_center_clips(previews):
 
 
 if __name__ == '__main__':
-    build_dataset(10)
+    build_dataset(1000)

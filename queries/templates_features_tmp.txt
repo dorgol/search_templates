@@ -1,0 +1,318 @@
+with main as
+(
+  select * 
+from 
+(
+select
+      post_id,
+      template_id,
+      lt_id,
+      ur.platform_device_id,
+      pc.created_at,
+      pc.export_id,
+      pc.preview_media_id,
+      pc.duration,
+      pc.height,
+      pc.width,
+      pc.app_name,
+      pr.post_id as remove_id,
+      pc.meta_received_at,
+      ur.platform,
+      pc.content_annotation,
+      case when pc.parent_template_id is null then "original" 
+           when pc.parent_template_id is not null then "remake" end as remake_status,
+      row_number() over(partition by post_id order by pc.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.backend_feed_post_create` as pc
+    left join `ltx-dwh-prod-raw.analytics_global.ltx_global_app_feed_user_registered` ur using(account_id)
+    left join `ltx-dwh-prod-raw.analytics.backend_feed_post_remove` pr using(post_id)
+    where "branded" not in unnest(post_metadata) and pc.app_name = "videoleap"
+    and preview_media_id is not null
+    and pc.meta_received_at >= '2023-04-20'
+    )
+    where rn = 1 and remove_id is null
+),
+
+posts_with_analytics as (
+  select
+    *
+  from (
+    select
+      p.post_id,
+    --   p.lt_id,
+    --   p.preview_media_id,
+    --   p.duration,
+    --   p.height,
+    --   p.width,
+      p.meta_received_at as post_timestamp,
+      es.session_analytics_id,
+      row_number() over (partition by e.export_id
+                        order by e.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.ios_videoleap_media_exported` e
+    join `ltx-dwh-prod-raw.analytics.ios_videoleap_media_export_started` es on lower(es.open_project_id) = lower(e.open_project_id)
+    join main p on lower(p.export_id) = lower(e.export_id)
+    where e.meta_received_at >= '2023-04-20'
+  )
+  where rn = 1
+  union all
+  select
+    *
+  from (
+    select
+      p.post_id,
+    --   p.lt_id,
+    --   p.preview_media_id,
+    --   p.duration,
+    --   p.height,
+    --   p.width,
+      p.meta_received_at as post_timestamp,
+      es.session_analytics_id,
+      row_number() over (partition by e.export_id
+                        order by e.meta_received_at desc) as rn
+    from `ltx-dwh-prod-raw.analytics.android_videoleap_media_exported` e
+    join `ltx-dwh-prod-raw.analytics.android_videoleap_session_analytics_reported` es on lower(es.open_project_id) = lower(e.project_id)
+    join main p on lower(p.export_id) = lower(e.export_id)
+    where e.meta_received_at >= '2023-04-20'
+  ) where rn = 1
+),
+
+features as (
+  select
+    session_analytics_id,
+    sum(is_replaceable) as replaceable_count,
+    array_agg(object_type) as feature_types,
+    array_agg(start_time) as start_times,
+    array_agg(feature_duration) as feature_durations
+  from (
+    select
+      session_analytics_id,
+      case
+        when is_replaceable = 'true' then 1
+        else 0
+      end as is_replaceable,
+      cast(start_time as float64) as start_time,
+      cast(end_time as float64) as end_time,
+      (cast(end_time as float64) - cast(start_time as float64)) as feature_duration,
+      regexp_replace(object, r'"', '') as object_type,
+    from (
+      select
+        session_analytics_id,
+        json_extract(json, '$.object_type') as object,
+        json_extract_scalar(json, "$.is_replaceable") as is_replaceable,
+        json_extract(json, '$.start_time') as start_time,
+        json_extract(json, '$.end_time') as end_time
+      from (
+        select
+          session_analytics_id,
+          json,
+        from (
+          select
+            session_analytics_ID,
+            outline_JSON
+          from `ltx-dwh-prod-raw.analytics.ios_videoleap_session_outline_json`
+          where meta_received_at >= '2023-04-20'
+        )
+        cross join unnest(json_extract_array(outline_json)) as json
+      )
+      union all
+      select
+        session_analytics_id,
+        json_extract(json, '$.object_type') as object,
+        'true' as is_replaceable,
+        json_extract(json, '$.start_time') as start_time,
+        json_extract(json, '$.end_time') as end_time
+      from (
+        select
+          session_analytics_id,
+          json,
+        from (
+          select
+            session_analytics_ID,
+            outline_JSON
+          from `ltx-dwh-prod-raw.analytics.android_videoleap_session_outline_json`
+          where meta_received_at >= '2023-04-20'
+        )
+        cross join unnest(json_extract_array(outline_json)) as json
+      )
+    )
+  )
+  group by 1
+),
+
+
+answers as
+(with intents as
+(
+  SELECT
+       platform_device_id,
+       case when origin_page_response is null then 'No Answer' 
+            when origin_page_response like '%personal%' then 'I edit for personal use' 
+            when origin_page_response like '%influencer%' then 'Im an influencer/creator' 
+            when origin_page_response like '%business%' then 'I promote a business'
+            when origin_page_response like '%fun%' then 'I edit for fun'
+            when origin_page_response like '%creator%' then 'Im a content creator'
+            when origin_page_response like '%Other%' then 'Other' else origin_page_response end as response_intent,
+   FROM `ltx-dwh-prod-raw`.`analytics_global`.`ltx_global_questionnaire_page_transition` pq
+        WHERE app_name = 'videoleap'
+        and origin_page_index = 0
+        and origin_page_name = 'So, what brings you here?'
+        and platform_device_id is not null
+),
+
+interests as (
+  SELECT 
+       platform_device_id,
+       case when origin_page_response is null then 'No Answer' 
+       else origin_page_response end as response_interests, 
+   FROM `ltx-dwh-prod-raw`.`analytics_global`.`ltx_global_questionnaire_page_transition` pq
+        WHERE app_name = 'videoleap'
+        and origin_page_name = 'What interests you?'
+        and platform_device_id is not null
+)
+
+select *
+from intents nt
+inner join interests nr
+using (platform_device_id)
+
+),
+
+posts as 
+(
+    select post_id, template_id
+    from main f
+    where date_trunc(date(f.meta_received_at), day) >= '2023-04-04'
+),
+
+actions as (
+     
+     (select distinct
+        "become_ready" as step,
+        f.platform,
+        f.post_id,
+        f.platform_device_id as id_for_vendor
+    from `ltx-dwh-prod-processed`.`app`.`feed_unnested_items_info` as f
+    join posts as p
+        on f.post_id = p.post_id
+    where date_trunc(date(f.meta_received_at), day) > '2023-04-04'
+     )
+    union all
+
+    (
+    select distinct
+        "use_template" as step,
+        f.platform,
+        p.post_id,
+        f.platform_device_id as id_for_vendor
+    from `ltx-dwh-prod-processed`.`app`.`feed_unnested_items_info` as f
+    join posts as p
+        on f.post_id = p.post_id
+--     join valid_versions as v
+--         on v.app_version = f.app_version_code
+    where actions in ("use_template")
+        and date_trunc(date(f.meta_received_at), day) > '2023-04-04'
+     )
+     union all
+    
+    (
+        select distinct
+            "export" as step,
+             "ios" as platform,
+             p.post_id,
+             es.id_for_vendor
+        from `ltx-dwh-prod-raw`.`analytics`.`ios_videoleap_template_editing_started`  es
+        join `ltx-dwh-prod-raw`.`analytics`.`ios_videoleap_template_editing_ended`  en
+            on es.template_editing_flow_id = en.template_editing_flow_id
+        join `ltx-dwh-prod-raw.analytics.ios_videoleap_media_export_started` xs
+            on en.open_project_id = xs.open_project_id
+        join `ltx-dwh-prod-raw.analytics.ios_videoleap_media_exported` ex
+            on xs.export_id = ex.export_id
+        join posts as p
+            on p.template_id = en.parent_template_id
+     --    join valid_versions as v
+     --        on v.app_version = es.app_version
+        where date_trunc(date(ex.meta_received_at), day) > '2023-04-04'
+    )
+    union all
+    
+    (
+        select distinct
+            "remake_published" as step,
+            "ios" as platform,
+            po.post_id,
+            p.platform_device_id as id_for_vendor
+        from `ltx-dwh-prod-raw`.`analytics`.`backend_feed_post_create` be
+        left join `ltx-dwh-prod-raw`.`analytics_global`.`ltx_global_app_feed_post_published` as p
+            on be.post_id = p.post_id
+        join posts as po
+            on be.parent_template_id = po.template_id
+     --    join valid_versions as v
+     --        on v.app_version = p.app_version_code
+        where date_trunc(date(p.meta_received_at), day) >= '2023-04-04'
+    )
+),
+
+metrics as (
+
+    select distinct
+    post_id,
+    count(distinct case when step = "become_ready"      then id_for_vendor end) as total_impressions,
+    count(distinct case when step = "start_purchase"      then id_for_vendor end) as start_purchase_actions,
+    count(distinct case when step = "use_template"      then id_for_vendor end) as use_template_clicks,
+    count(distinct case when step = "export"            then id_for_vendor end) as num_exports,
+    count(distinct case when step = "remake_published"  then id_for_vendor end) as remake_shared,
+   safe_divide(count(distinct case when step = "use_template"      then id_for_vendor end) * 100.0 , count(distinct case when step = "become_ready" then id_for_vendor end) )as use_template_clicks_from_impressions,
+   safe_divide(count(distinct case when step = "start_purchase"      then id_for_vendor end) * 100.0 , count(distinct case when step = "become_ready" then id_for_vendor end) )as start_purchase_from_impressions,
+   safe_divide(count(distinct case when step = "export"            then id_for_vendor end) * 100.0 , count(distinct case when step = "become_ready" then id_for_vendor end) )as exports_from_impressions,
+   safe_divide(count(distinct case when step = "remake_published"  then id_for_vendor end) * 100.0 , count(distinct case when step = "become_ready"  then id_for_vendor end)) as remake_shares_from_impressions,
+   safe_divide(count(distinct case when step = "export"            then id_for_vendor end) * 100.0 , count(distinct case when step = "use_template" then id_for_vendor end) )as exports_from_use_template,
+from actions
+group by 1
+order by exports_from_impressions desc
+
+)
+
+
+select
+    post_id,
+      template_id,
+      lt_id,
+      platform_device_id,
+      created_at,
+      export_id,
+      preview_media_id,
+      duration,
+      height,
+      width,
+      app_name,
+      post_id as remove_id,
+      meta_received_at,
+      platform,
+      content_annotation,
+      remake_status,
+      p.session_analytics_id,
+      f.session_analytics_id,
+      f.replaceable_count,
+      f.feature_types,
+      f.start_times,
+      f.feature_durations,
+      a.response_intent,
+      a.response_interests,
+      m.total_impressions,
+      m.start_purchase_actions,
+      m.use_template_clicks,
+      m.num_exports,
+      m.remake_shared,
+      m.use_template_clicks_from_impressions,
+      m.start_purchase_from_impressions,
+      m.exports_from_impressions,
+      m.remake_shares_from_impressions,
+      m.exports_from_use_template
+from main
+join posts_with_analytics p
+using(post_id)
+join features f
+using (session_analytics_id)
+left join answers a
+using (platform_device_id)
+join metrics
+using (post_id)

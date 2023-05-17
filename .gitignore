@@ -1,3 +1,5 @@
 .idea/
 data/
 src/__pycache__/
+src/downstream_tasks/__pycache__/
+src/downstream_tasks/clustering/__pycache__/
