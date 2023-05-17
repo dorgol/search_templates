@@ -1,10 +1,13 @@
 cloud:
   CLOUD_LOCATION: "US"
   PROJECT: "ltx-dwh-playground"
+  DATASET: "templates_analysis"
 
 paths:
-  TEMPLATES_QUERY_PATH: "queries/templates_with_features.txt"
-  TEMPLATES_PATH: "data/templates.csv"
+  TEMPLATES_QUERY_PATH: "queries/templates_features_full.txt"
+  TEMPLATES_PATH: "data/templates.json"
   VIDEOS_PATH: "data/video_data"
   VID_EMB_PATH: "data/frames_encoding.csv"
   VISITED_PATH: "data/visited.csv"
+
+NUM_NEIGHBORS: 1000

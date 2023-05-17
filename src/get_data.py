@@ -1,5 +1,6 @@
 import pandas as pd
 from google.cloud import bigquery
+from google.cloud import storage
 import yaml
 import typing
 import pathlib
@@ -47,7 +48,8 @@ class SingleQuery:
         with open(self.path, "r") as f:
             self.query = f.read()
 
-    def run_query(self, result: str) -> typing.Union[pd.DataFrame, None]:
+    def run_query(self, result: str, dataset_id: str = None, table_id: str = None,
+                  bucket_name: str = None, file_name: str = None) -> typing.Union[pd.DataFrame, None]:
         """
         Runs the query on BigQuery and returns the result as a DataFrame or None.
 
@@ -60,13 +62,52 @@ class SingleQuery:
 
         Raises:
             ValueError: If result is not "df" or "bq".
+            :param file_name:
+            :param bucket_name:
+            :param result:
+            :param table_id:
+            :param dataset_id:
         """
+        # Get the BigQuery job done
+        job_config = bigquery.QueryJobConfig(destination=f"{self.client.project}.{dataset_id}.{table_id}")
         query_job = self.client.query(
             self.query,
             location=config['cloud']['CLOUD_LOCATION'],
+            job_config=job_config
         )
         if result == "bq":
             query_job.result()
+            if query_job.error_result is not None:
+                print(f"Error occurred: {query_job.error_result['message']}")
+            else:
+                print(f"Query results saved to: {dataset_id}.{table_id}")
+
+
+            # # Write the results to a JSON file in GCS
+            # import json
+            # data = json.loads(blob.download_as_string(client=None))
+
+            # save results to gcs
+            destination_uri = "gs://{}/{}".format(bucket_name, file_name)
+            dataset_ref = bigquery.DatasetReference(self.client.project, dataset_id)
+            table_ref = dataset_ref.table(table_id)
+            job_config = bigquery.job.ExtractJobConfig()
+            job_config.destination_format = bigquery.DestinationFormat.NEWLINE_DELIMITED_JSON
+
+            extract_job = self.client.extract_table(
+                table_ref,
+                destination_uri,
+                job_config=job_config,
+                # Location must match that of the source table.
+                location="US",
+            )  # API request
+            extract_job.result()  # Waits for job to complete.
+
+            gcs_client = storage.Client(project=config['cloud']['PROJECT'])
+            bucket = gcs_client.bucket(bucket_name)
+            blob = bucket.blob(file_name)
+            blob.download_to_filename(config['paths']['TEMPLATES_PATH'])
+
         elif result == "df":
             df = query_job.to_dataframe()
             df = self.post_process(df)
@@ -103,9 +144,11 @@ def fetch_data(query_path, data_path, reload=False, pp_function=None):
         sq = SingleQuery(path_to_query=query_path)
         if pp_function is not None:
             sq.post_process = pp_function
-        df = sq.run_query(result="df")
-        df.to_csv(data_path)
-        return df
+        sq.run_query(result="bq", dataset_id="templates_analysis", table_id="templates",
+                     bucket_name="templates_analysis", file_name="outputs.json")
+        # df = sq.run_query(result="df")
+        # df.to_csv(data_path)
+        # return df
 
 
 def main(reload=True):
