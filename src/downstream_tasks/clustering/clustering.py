@@ -5,9 +5,6 @@ from sklearn.metrics import silhouette_score
 from sklearn.model_selection import ParameterGrid
 import numpy as np
 
-df = pd.read_csv('data/frames_encoding.csv')
-X = df.iloc[:, 3:].values
-
 
 def create_clustering(X, cls, **kwargs):
     algorithm = cls(**kwargs)
@@ -64,6 +61,8 @@ def grid_search_clustering(embeddings, algorithm, params):
 
 
 if __name__ == '__main__':
+    df = pd.read_csv('data/frames_encoding.csv')
+    X = df.iloc[:, 3:].values
     kmeans_params = {'n_clusters': [80, 90, 100]}
     dbscan_params = {'eps': [2.0, 2.5, 3.0, 4.0, 5.0], 'min_samples': [2]}
 

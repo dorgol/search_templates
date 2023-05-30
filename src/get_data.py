@@ -82,11 +82,6 @@ class SingleQuery:
             else:
                 print(f"Query results saved to: {dataset_id}.{table_id}")
 
-
-            # # Write the results to a JSON file in GCS
-            # import json
-            # data = json.loads(blob.download_as_string(client=None))
-
             # save results to gcs
             destination_uri = "gs://{}/{}".format(bucket_name, file_name)
             dataset_ref = bigquery.DatasetReference(self.client.project, dataset_id)
@@ -106,7 +101,8 @@ class SingleQuery:
             gcs_client = storage.Client(project=config['cloud']['PROJECT'])
             bucket = gcs_client.bucket(bucket_name)
             blob = bucket.blob(file_name)
-            blob.download_to_filename(config['paths']['TEMPLATES_PATH'])
+            # blob.download_to_filename(config['paths']['TEMPLATES_PATH'])
+            blob.download_to_filename('data/' + file_name)
 
         elif result == "df":
             df = query_job.to_dataframe()
@@ -146,9 +142,6 @@ def fetch_data(query_path, data_path, reload=False, pp_function=None):
             sq.post_process = pp_function
         sq.run_query(result="bq", dataset_id="templates_analysis", table_id="templates",
                      bucket_name="templates_analysis", file_name="outputs.json")
-        # df = sq.run_query(result="df")
-        # df.to_csv(data_path)
-        # return df
 
 
 def main(reload=True):

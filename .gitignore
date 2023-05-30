@@ -3,3 +3,7 @@ data/
 src/__pycache__/
 src/downstream_tasks/__pycache__/
 src/downstream_tasks/clustering/__pycache__/
+.DS_Store
+analyses/.ipynb_checkpoints/
+analyses/lib
+analyses/example*

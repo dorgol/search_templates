@@ -19,6 +19,7 @@ select
       pc.meta_received_at,
       ur.platform,
       pc.content_annotation,
+      pc.parent_template_id,
       case when pc.parent_template_id is null then "original"
            when pc.parent_template_id is not null then "remake" end as remake_status,
       row_number() over(partition by post_id order by pc.meta_received_at desc) as rn
@@ -27,7 +28,7 @@ select
     left join `ltx-dwh-prod-raw.analytics.backend_feed_post_remove` pr using(post_id)
     where "branded" not in unnest(post_metadata) and pc.app_name = "videoleap"
     and preview_media_id is not null
-    and pc.meta_received_at >= '2023-04-20'
+    and date_trunc(date(pc.meta_received_at), day) >= current_date() - 7
     )
     where rn = 1 and remove_id is null
 ),
@@ -38,11 +39,6 @@ posts_with_analytics as (
   from (
     select
       p.post_id,
-    --   p.lt_id,
-    --   p.preview_media_id,
-    --   p.duration,
-    --   p.height,
-    --   p.width,
       p.meta_received_at as post_timestamp,
       es.session_analytics_id,
       row_number() over (partition by e.export_id
@@ -50,7 +46,7 @@ posts_with_analytics as (
     from `ltx-dwh-prod-raw.analytics.ios_videoleap_media_exported` e
     join `ltx-dwh-prod-raw.analytics.ios_videoleap_media_export_started` es on lower(es.open_project_id) = lower(e.open_project_id)
     join main p on lower(p.export_id) = lower(e.export_id)
-    where e.meta_received_at >= '2023-04-20'
+    where date_trunc(date(e.meta_received_at), day) >= current_date() - 7
   )
   where rn = 1
   union all
@@ -59,11 +55,6 @@ posts_with_analytics as (
   from (
     select
       p.post_id,
-    --   p.lt_id,
-    --   p.preview_media_id,
-    --   p.duration,
-    --   p.height,
-    --   p.width,
       p.meta_received_at as post_timestamp,
       es.session_analytics_id,
       row_number() over (partition by e.export_id
@@ -71,7 +62,7 @@ posts_with_analytics as (
     from `ltx-dwh-prod-raw.analytics.android_videoleap_media_exported` e
     join `ltx-dwh-prod-raw.analytics.android_videoleap_session_analytics_reported` es on lower(es.open_project_id) = lower(e.project_id)
     join main p on lower(p.export_id) = lower(e.export_id)
-    where e.meta_received_at >= '2023-04-20'
+    where date_trunc(date(e.meta_received_at), day) >= current_date() - 7
   ) where rn = 1
 ),
 
@@ -109,7 +100,7 @@ features as (
             session_analytics_ID,
             outline_JSON
           from `ltx-dwh-prod-raw.analytics.ios_videoleap_session_outline_json`
-          where meta_received_at >= '2023-04-20'
+          where date_trunc(date(meta_received_at), day) >= current_date() - 7
         )
         cross join unnest(json_extract_array(outline_json)) as json
       )
@@ -129,7 +120,7 @@ features as (
             session_analytics_ID,
             outline_JSON
           from `ltx-dwh-prod-raw.analytics.android_videoleap_session_outline_json`
-          where meta_received_at >= '2023-04-20'
+          where date_trunc(date(meta_received_at), day) >= current_date() - 7
         )
         cross join unnest(json_extract_array(outline_json)) as json
       )
@@ -180,7 +171,7 @@ posts as
 (
     select post_id, template_id
     from main f
-    where date_trunc(date(f.meta_received_at), day) >= '2023-04-04'
+    where date_trunc(date(f.meta_received_at), day) >= current_date() - 7
 ),
 
 actions as (
@@ -193,7 +184,7 @@ actions as (
     from `ltx-dwh-prod-processed`.`app`.`feed_unnested_items_info` as f
     join posts as p
         on f.post_id = p.post_id
-    where date_trunc(date(f.meta_received_at), day) > '2023-04-04'
+    where date_trunc(date(f.meta_received_at), day) > current_date() - 7
      )
     union all
 
@@ -206,10 +197,8 @@ actions as (
     from `ltx-dwh-prod-processed`.`app`.`feed_unnested_items_info` as f
     join posts as p
         on f.post_id = p.post_id
---     join valid_versions as v
---         on v.app_version = f.app_version_code
     where actions in ("use_template")
-        and date_trunc(date(f.meta_received_at), day) > '2023-04-04'
+        and date_trunc(date(f.meta_received_at), day) > current_date() - 7
      )
      union all
 
@@ -230,7 +219,7 @@ actions as (
             on p.template_id = en.parent_template_id
      --    join valid_versions as v
      --        on v.app_version = es.app_version
-        where date_trunc(date(ex.meta_received_at), day) > '2023-04-04'
+        where date_trunc(date(ex.meta_received_at), day) > current_date() - 7
     )
     union all
 
@@ -245,9 +234,7 @@ actions as (
             on be.post_id = p.post_id
         join posts as po
             on be.parent_template_id = po.template_id
-     --    join valid_versions as v
-     --        on v.app_version = p.app_version_code
-        where date_trunc(date(p.meta_received_at), day) >= '2023-04-04'
+        where date_trunc(date(p.meta_received_at), day) >= current_date() - 7
     )
 ),
 
@@ -289,6 +276,7 @@ select
       platform,
       content_annotation,
       remake_status,
+      parent_template_id,
       p.session_analytics_id,
       f.replaceable_count,
       f.feature_types,

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["dorgold46 <dgoldenberg@lightricks.com>"]
 readme = "README.md"
-packages = [{include = "encode_templates"}]
+
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -22,6 +22,7 @@ optimum = "^1.8.3"
 scikit-learn = "^1.2.2"
 matplotlib = "^3.7.1"
 google-cloud-storage = "^2.9.0"
+jupyter = "^1.0.0"
 
 
 [build-system]

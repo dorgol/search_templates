@@ -1,0 +1,37 @@
+with parents as (
+  SELECT template_id,
+         content_annotation,
+         tags_parent.tag,
+         tags_parent.score
+  FROM `ltx-dwh-prod-raw.analytics.backend_feed_post_create`,
+  UNNEST(content_annotation) AS tags_parent
+  JOIN (
+    SELECT distinct(parent_template_id) as template_id
+    FROM `ltx-dwh-prod-raw.analytics.backend_feed_post_create`
+       )
+  USING (template_id)
+  WHERE tags_parent.tag IS NOT NULL
+  AND DATE(_PARTITIONTIME) >= "2023-05-01"
+  -- LIMIT 10000
+),
+
+child as (
+  SELECT template_id,
+         parent_template_id,
+         tags_child.tag,
+         tags_child.score
+  FROM `ltx-dwh-prod-raw.analytics.backend_feed_post_create`,
+  UNNEST(content_annotation) AS tags_child
+  WHERE parent_template_id is NOT NULL
+  AND tags_child.tag IS NOT NULL
+)
+
+
+select
+  c.parent_template_id,
+  c.template_id,
+  c.tag as child_tag,
+  p.tag as parent_tag
+from parents p
+join child c
+on c.parent_template_id = p.template_id

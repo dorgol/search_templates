@@ -14,7 +14,7 @@ VIDEOS_PATH = config['paths']['VIDEOS_PATH']
 
 
 def get_urls(num_samples=None):
-    urls = pd.read_csv('data/templates.csv')
+    urls = pd.read_json('data/templates.json', lines=True)
     urls = urls.preview_media_id.drop_duplicates().tolist()
     if num_samples is not None:
         urls = random.sample(urls, num_samples)
@@ -94,8 +94,7 @@ def save_encoding(frames_df, save_path, visited_path):
         print("no new video was found")
 
 
-def get_center_clips(previews):
-    df = pd.read_csv('data/templates.csv')
+def get_center_clips(df, previews):
     df = df[df['feature_types'].str.lower().isin(['clip', 'mixer'])]
     df = df[df['preview_media_id'].isin(previews)]
     df['center_time'] = (df['start_times'] + df['feature_durations'])/2

@@ -1,4 +1,5 @@
-from transformers import AutoProcessor, BlipModel
+from transformers import CLIPProcessor, CLIPModel
 
-text_model = BlipModel.from_pretrained("Salesforce/blip-image-captioning-base")
-tokenizer = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+# Instantiate model and processor
+text_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+tokenizer = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")

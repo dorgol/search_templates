@@ -9,5 +9,7 @@ paths:
   VIDEOS_PATH: "data/video_data"
   VID_EMB_PATH: "data/frames_encoding.csv"
   VISITED_PATH: "data/visited.csv"
+  TAGS_QUERY_PATH: "queries/parent_children_tags.txt"
+  TAGS_PATH: "data/tags.json"
 
 NUM_NEIGHBORS: 1000

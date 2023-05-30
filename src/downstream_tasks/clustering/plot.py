@@ -31,7 +31,7 @@ def plot_tsne_data(embeddings, meta_data=None):
             'xanchor': 'center',
             'yanchor': 'top'})
 
-    fig.show()
+    return fig
 
     # fig.write_html(OUTPUTS_PATH + plot_name + '.html')
 
