@@ -33,7 +33,8 @@ def main():
         sv.download_results()
     video_num = st.number_input('result number (out of {})'.format(num_results), min_value=0,
                                 max_value=num_results)
-    _show_video(video_num, ids)
+    if video_num >= 0:
+        _show_video(video_num, ids)
 
 
 main()
