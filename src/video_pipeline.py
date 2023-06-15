@@ -34,7 +34,6 @@ class VideoPipeline:
 
 
 def run_all(urls):
-    # df = pd.read_json('data/templates.json', lines=True)
     rows = []
     with open('data/templates.json', 'r') as file:
         for line in file:

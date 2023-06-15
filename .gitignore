@@ -7,3 +7,5 @@ src/downstream_tasks/clustering/__pycache__/
 analyses/.ipynb_checkpoints/
 analyses/lib
 analyses/example*
+analyses/plots
+tmp.py

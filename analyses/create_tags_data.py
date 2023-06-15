@@ -25,8 +25,8 @@ def fetch_data(query_path, data_path, reload=False, pp_function=None):
         sq = SingleQuery(path_to_query=query_path)
         if pp_function is not None:
             sq.post_process = pp_function
-        sq.run_query(result="bq", dataset_id="templates_analysis", table_id="tags",
-                     bucket_name="templates_analysis", file_name="tags.json")
+        sq.run_query(result="bq", dataset_id="templates_analysis", table_id="tags_originals",
+                     bucket_name="templates_analysis", file_name="tags_originals.json")
 
 
-fetch_data(config['paths']['TAGS_QUERY_PATH'], config['paths']['TAGS_PATH'], reload=True)
+fetch_data(config['paths']['ORIGINAL_QUERY_PATH'], config['paths']['TAGS_PATH'], reload=True)

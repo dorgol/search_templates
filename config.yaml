@@ -10,6 +10,8 @@ paths:
   VID_EMB_PATH: "data/frames_encoding.csv"
   VISITED_PATH: "data/visited.csv"
   TAGS_QUERY_PATH: "queries/parent_children_tags.txt"
+  ORIGINAL_QUERY_PATH: "queries/parent_children_original_tags.txt"
   TAGS_PATH: "data/tags.json"
+  ORIGINAL_PATH: "data/original.json"
 
 NUM_NEIGHBORS: 1000
